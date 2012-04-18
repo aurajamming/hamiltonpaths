@@ -70,11 +70,11 @@ struct Grid {
     return valid_coord(Node::coordinate_t(row, col));
   }
 
-  inline const Node::index_t index(Node::ordinate_t row, Node::ordinate_t col) const {
+  inline Node::index_t index(Node::ordinate_t row, Node::ordinate_t col) const {
     return (row * cols) + col;
   }
 
-  inline const Node::index_t index(Node::coordinate_t coord) const {
+  inline Node::index_t index(Node::coordinate_t coord) const {
     return index(coord.first, coord.second);
   }
 
