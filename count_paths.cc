@@ -13,9 +13,8 @@
 
 using namespace std;
 
-
-typedef unordered_map<Configuration, uint32_t> config_set_t;
-typedef config_set_t::value_type config_count_t;
+typedef Configuration<vector<unsigned short>, no_size_t> ResizableConfiguration;
+typedef Configuration<array<unsigned short, 8>, unsigned short> Max8Configuration;
 
 
 void row_setup(Grid g, Grid::Node::ordinate_t row, 
@@ -40,13 +39,13 @@ void row_setup(Grid g, Grid::Node::ordinate_t row,
 }
 
 
-
+template<class ConfigurationT>
 class for_each_next_config {
 private:
   const Grid::Node::ordinate_t row, size;
-  const Configuration last_config;
-  const vector<vector<Grid::Node> > next_neighbors;
-  const function<void (Configuration)> action;
+  const ConfigurationT &last_config;
+  const vector<vector<Grid::Node> > &next_neighbors;
+  const function<void (const ConfigurationT&)> action;
 
   vector<Grid::Node::degree_t> residual_degrees;
   vector<bool> vmask, hmask;
@@ -54,10 +53,10 @@ private:
 public:
 
   for_each_next_config(const int row_, 
-		       const Configuration last_config_, 
+		       const ConfigurationT &last_config_, 
 		       const vector<Grid::Node::degree_t>& target_degrees_, 
-		       const vector<vector<Grid::Node> > next_neighbors_,
-		       const function<void (Configuration) > &action_)
+		       const vector<vector<Grid::Node> >& next_neighbors_,
+		       const function<void (const ConfigurationT&) > &action_)
     : row(row_), 
       size(last_config_.size()), 
       last_config(last_config_), 
@@ -75,14 +74,21 @@ public:
   }
 
   void enumerate_options(Grid::Node::ordinate_t col) {
-    if (col == size) {
-      yield_configuration();
+    assert(col < size);
+
+    const auto r = residual_degrees[col];
+    if (r <= 0) {
+      if (col == size - 1) {
+    	yield_configuration();
+      } else {
+	hmask[col] = vmask[col] = false;
+    	enumerate_options(col + 1);
+      }
       return;
     }
+      
 
-    for(auto neighbor_comb : combinations<Grid::Node>(next_neighbors[col], 
-						      max(Grid::Node::degree_t(0), residual_degrees[col]))) 
-    {
+    for(auto neighbor_comb : combinations<Grid::Node>(next_neighbors[col], r)) {
       hmask[col] = vmask[col] = false;
 			   
       for(Grid::Node neighbor : neighbor_comb) {
@@ -95,7 +101,11 @@ public:
 	}
       }
 
-      enumerate_options(col + 1);
+      if (col == size - 1) {
+	yield_configuration();
+      } else {
+	enumerate_options(col + 1);
+      }
 
       for(Grid::Node neighbor : neighbor_comb) {
 	++residual_degrees[col];
@@ -106,8 +116,8 @@ public:
     }
   }
 
-  void yield_configuration() {
-    Configuration config(last_config);
+  void yield_configuration() const {
+    ConfigurationT config(last_config);
     int start = -1;
 
     for(auto col : range(size)) {
@@ -132,26 +142,28 @@ public:
 
 
 			  
-
+template<class ConfigurationT>
 int count_paths(Grid g) {
+  typedef unordered_map<ConfigurationT, unsigned int> config_set_t;
+  typedef typename config_set_t::value_type config_count_t;
+
   config_set_t cur_configs, next_configs;
   vector<Grid::Node::degree_t> target_degrees(g.cols, -1);
   vector<vector<Grid::Node> > next_neighbors(g.cols);
 
-  Configuration initial_config(vector<int>(g.cols, 0));
+  ConfigurationT initial_config(vector<int>(g.cols, 0));
   cur_configs.insert(make_pair(initial_config, 1));
 
   for(auto row : range(g.rows)) {
     row_setup(g, row, target_degrees, next_neighbors);
     
     for(auto cur_config_count : cur_configs) {
-      const Configuration &cur_config = cur_config_count.first;
-      const int cur_count = cur_config_count.second;
-
-      for_each_next_config(row, cur_config, target_degrees, next_neighbors,
-			   [&](const Configuration &next_config) {
-			     next_configs[next_config] += cur_count;
-			   });
+      const ConfigurationT &cur_config = cur_config_count.first;
+      const int &cur_count = cur_config_count.second;
+      for_each_next_config<ConfigurationT>(row, cur_config, target_degrees, next_neighbors,
+        [&](const ConfigurationT &next_config) {
+          next_configs[next_config] += cur_count;
+        });
     }
 
     swap(cur_configs, next_configs);
@@ -166,10 +178,18 @@ int count_paths(Grid g) {
 
 
 
+template<typename F>
+void repeat(size_t times, F action) {
+  for(size_t i = times; i != 0; --i) 
+    action();
+}
+
 int main(int argc, char *argv[]) {
   const bool use_file = argc > 1;
   ifstream file;  
-  
+
+
+
   if (use_file) {
     file.open(argv[1]);
     if(not file.is_open()) {
@@ -182,11 +202,16 @@ int main(int argc, char *argv[]) {
   if (argc > 2) {
     count = atoi(argv[2]);
   }
+
   Grid g(use_file ? file.seekg(0) : cin);
 
   int total = 0;
-  for(auto i : range(count)) {
-    total = count_paths(g);
+
+  
+  if (g.cols <= 8) {
+    repeat(count, [&]{total = count_paths<Max8Configuration>(g);});
+  } else {
+    repeat(count, [&]{total = count_paths<ResizableConfiguration>(g);});
   }
 
   cout << total << endl;

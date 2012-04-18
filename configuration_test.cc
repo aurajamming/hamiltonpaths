@@ -10,14 +10,21 @@ using namespace std;
 typedef pair<int, int> link_t;
 typedef tuple<int, int, string> masked_link_t;
 
+typedef  Configuration<vector<unsigned short>, no_size_t> VectorConfig;
+typedef  Configuration<array<unsigned short, 8>, unsigned short> ArrayConfig;
 
-void test_op(Configuration &c, link_t op) {
+
+
+
+template<class C>
+void test_op(C &c, link_t op) {
   cerr << "  " << c.tostring() << " via " << make_pair(get<0>(op), get<1>(op)) << " to ";
   c.link(get<0>(op), get<1>(op));
   cerr << c.tostring() << endl;    
 }
 
-void test_op(Configuration &c, masked_link_t op) {
+template<class C>
+void test_op(C &c, masked_link_t op) {
   cerr << "  " << c.tostring();
   cerr << " via " << make_pair(get<0>(op), get<1>(op));
   c.link(get<0>(op), get<1>(op));
@@ -32,7 +39,7 @@ void test_op(Configuration &c, masked_link_t op) {
 }
 
 
-template<class T>
+template<class C, class T>
 void test_ops(tuple<string, vector<T>, string> test) {
   string start, end;
   vector<T> operations;
@@ -40,7 +47,7 @@ void test_ops(tuple<string, vector<T>, string> test) {
 
   cerr << "testing " << start << " via " << operations << " to " << end << endl;
 
-  Configuration c(start);
+  C c(start);
   EXPECT_EQ(start, c.tostring());
 
   for(auto op : operations) {
@@ -50,7 +57,7 @@ void test_ops(tuple<string, vector<T>, string> test) {
   EXPECT_EQ(end, c.tostring());
 };
 
-TEST(Configuration, link) {
+TEST(ArrayConfig, link) {
   typedef tuple<string, vector<link_t>, string> test_t;
   vector<test_t> tests {
     test_t{"1221", {{2,3}}, "1100"},
@@ -70,11 +77,12 @@ TEST(Configuration, link) {
   };
 
   for(auto t : tests) {
-    test_ops(t);
+    test_ops<VectorConfig>(t);
+    test_ops<ArrayConfig>(t);
   }
 }
 
-TEST(Configuration, mask) {
+TEST(ArrayConfig, mask) {
   typedef tuple<string, vector<masked_link_t>, string> test_t;
   vector<test_t> tests {
     test_t{"01202", { masked_link_t{0, 1, "10101"}, 
@@ -83,6 +91,7 @@ TEST(Configuration, mask) {
   };
 
   for(auto t : tests) {
-    test_ops(t);
+    test_ops<VectorConfig>(t);
+    test_ops<ArrayConfig>(t);
   }
 }
