@@ -28,8 +28,15 @@ Grid::Grid(size_t rows, size_t cols) :
     for(Node::ordinate_t col : range(cols)) {
       assert(nodes.size() == index(row, col));
       assert(coordinates(nodes.size()) == Node::coordinate_t({row, col}));
-      nodes.emplace_back(Node({row, col, 2}));
+#ifdef DEBUG
+#define DELETED_INITIALIZER false
+#else
+#define DELETED_INITIALIZER
+#endif
+      nodes.emplace_back(Node({row, col, 2, DELETED_INITIALIZER}));
+#undef DELETED_INITIALIZER
     }
+
   }
   
   adjacency.resize(nodes.size());
