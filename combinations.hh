@@ -15,15 +15,13 @@ using namespace std;
 
 template<class T>
 struct combinations {
-  const vector<T> pool;
+  const vector<T> &pool;
   const size_t r;
 
-  combinations(const vector<T> elements, int r) :
+  combinations(const vector<T> &elements, unsigned int r) :
     pool(elements),
     r(r)
-  {
-    assert(r>=0);
-  }
+  {}
 
   friend bool operator==(const combinations<T> &a, const combinations<T> &b) {
     return a.r == b.r and a.pool == b.pool;
@@ -58,8 +56,7 @@ struct combinations_iter : iterator<forward_iterator_tag, T, void> {
 
   void initialize() {
     for(auto i : range(parent.r)) {
-      T copy = parent.pool[indices[i]];      
-      result[i] = copy; //parent.pool[indices[i]];
+      result[i] = parent.pool[indices[i]];
     }
   }
 
@@ -100,7 +97,7 @@ struct combinations_iter : iterator<forward_iterator_tag, T, void> {
     return not (a == b);
   }
 
-  vector<T> operator*() const {
+  const vector<T> & operator*() const {
     return result;
   }
 
