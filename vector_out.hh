@@ -2,6 +2,7 @@
 #define __VECTOR_OUT__
 
 #include <vector>
+#include <map>
 #include <utility>
 #include <iostream>
 #include "range.hh"
@@ -9,7 +10,7 @@
 template<class T>  
 ostream &operator<<(ostream &os, const vector<T> &things) {
   bool first = true;
-  os << "{";
+  os << "[";
   for(auto cur : things) {
     if (not first) {
       os << ", ";
@@ -17,7 +18,22 @@ ostream &operator<<(ostream &os, const vector<T> &things) {
     first = false;
     os << cur;
   }
-  os << "}";
+  os << "]";
+  return os;
+}
+
+template<class T, size_t N>
+ostream &operator<<(ostream &os, const array<T,N> &things) {
+  bool first = true;
+  os << "[";
+  for(auto cur : things) {
+    if (not first) {
+      os << ", ";
+    }
+    first = false;
+    os << cur;
+  }
+  os << "]";
   return os;
 }
 
@@ -51,5 +67,21 @@ ostream &operator<<(ostream &os, const tuple<Ts...> &things) {
   return os;
 }
   
+
+template<class T1, class T2>
+ostream &operator<<(ostream &os, const map<T1, T2> &things) {
+  bool first = true;
+  os << "{";
+  for(auto cur : things) {
+    if (not first) {
+      os << ", ";      
+    }
+    first = false;
+    os << cur.first << ": " << cur.second;
+  }
+  os << "}";
+
+  return os;
+}
 
 #endif
