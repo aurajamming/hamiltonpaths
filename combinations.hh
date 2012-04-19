@@ -75,10 +75,10 @@ struct combinations_iter : iterator<forward_iterator_tag, T, void> {
 
     if (i >= 0) {
       indices[i] ++;
-      for (j = i + 1 ; j < r ; j++)
+      for (j = i + 1 ; j < static_cast<int>(r); j++)
 	indices[j] = indices[j - 1] + 1;
     
-      for ( ; i < r ; i++) {
+      for ( ; i < static_cast<int>(r) ; i++) {
 	result[i] = parent.pool[indices[i]];
       }
     } else {
