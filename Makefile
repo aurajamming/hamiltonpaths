@@ -12,12 +12,10 @@ TESTS = configuration_test
 GTEST_HEADERS = /usr/include/gtest/*.h \
                 /usr/include/gtest/internal/*.h
 
-count: count_paths.cc grid.cc
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -o count $^
-
-count_paths.cc: configuration.hh combinations.hh grid.hh range.hh vector_out.hh
-grid.cc: grid.hh range.hh
-
+COUNT_SOURCES = count_paths.cc grid.cc
+COUNT_HEADERS = configuration.hh combinations.hh grid.hh range.hh vector_out.hh
+count: $(COUNT_SOURCES) $(COUNT_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -o count $(COUNT_SOURCES)
 
 test : $(TESTS)
 	echo $(TESTS)
