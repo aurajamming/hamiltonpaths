@@ -45,13 +45,13 @@ Grid::Grid(size_t rows, size_t cols) :
     for(Node::ordinate_t col : range(cols)) {      
       Node::coordinate_t pos(row, col);
       const Node::index_t idx = index(row, col);      
-      if (row + 1 < rows) {
+      if (row  < rows - 1) {
 	const Node::index_t other_idx = index(row+1, col);
 	adjacency[idx].push_back(other_idx);
 	adjacency[other_idx].push_back(idx);
       }
       
-      if (col + 1 < cols) {
+      if (col < cols - 1) {
 	const Node::index_t other_idx = index(row, col+1);
 	adjacency[idx].push_back(other_idx);
 	adjacency[other_idx].push_back(idx);
@@ -98,7 +98,7 @@ Grid::Grid(istream &is) {
   }
 
   assert(have_start == have_end);
-  g.have_start_and_end = have_start;
+  g.have_start_and_end = have_start && have_end;
 
   swap(g, *this);
 }

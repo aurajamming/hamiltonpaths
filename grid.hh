@@ -62,8 +62,7 @@ struct Grid {
 
 
   inline bool valid_coord(const Node::coordinate_t &pos) const {
-    return (pos.first >= 0 and rows > pos.first and
-            pos.second >= 0 and cols > pos.second);
+    return (rows > pos.first and cols > pos.second);
   }
 
   inline bool valid_coord(const Node::ordinate_t row, const Node::ordinate_t col) const {
