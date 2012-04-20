@@ -116,7 +116,7 @@ public:
     }
   }
 
-  void yield_configuration() const {
+  inline void yield_configuration() const {
     ConfigurationT config(last_config);
     int start = -1;
 
@@ -141,38 +141,76 @@ public:
 
 
 
+struct configstate {
+  array<unsigned int, 2> count;
+  array<unsigned int, 2> tag;
+};
+
+ostream &operator<<(ostream &os, const configstate &cs) {
+  os << "<count: " << cs.count << ", ";
+  os << "tag: " << cs.tag << ">";
+  return os;
+}
+
 			  
 template<class ConfigurationT>
-int count_paths(Grid g) {
-  typedef unordered_map<ConfigurationT, unsigned int> config_set_t;
+unsigned int count_paths(Grid g) {
+  typedef map<ConfigurationT, configstate > config_set_t;
   typedef typename config_set_t::value_type config_count_t;
 
   config_set_t cur_configs, next_configs;
   vector<Grid::Node::degree_t> target_degrees(g.cols, -1);
   vector<vector<Grid::Node> > next_neighbors(g.cols);
+  int sel = 1;
 
   ConfigurationT initial_config(vector<int>(g.cols, 0));
-  cur_configs.insert(make_pair(initial_config, 1));
+  configstate initial_state;
+  initial_state.count[sel] = 1;
+  initial_state.tag[sel] = 0;
+  cur_configs.insert(make_pair(initial_config, initial_state));
 
-  for(auto row : range(g.rows)) {
+
+
+  // cerr << "Initial config:" << endl;
+  // cerr << cur_configs << endl;
+
+  for(unsigned int row : range(g.rows)) {
     row_setup(g, row, target_degrees, next_neighbors);
     
     for(auto cur_config_count : cur_configs) {
-      const ConfigurationT &cur_config = cur_config_count.first;
-      const int &cur_count = cur_config_count.second;
+      const auto & cur_config = cur_config_count.first;
+      const auto & cur_count = cur_config_count.second.count[sel];
+
+      if (cur_config_count.second.tag[sel] != row)
+	continue;
+
       for_each_next_config<ConfigurationT>(row, cur_config, target_degrees, next_neighbors,
         [&](const ConfigurationT &next_config) {
-          next_configs[next_config] += cur_count;
+          configstate & count_state = cur_configs[next_config];
+
+	  if (count_state.tag[1-sel] != row + 1) {
+	    count_state.tag[1-sel] = row + 1;
+	    count_state.count[1-sel] = 0;
+	  }
+	  count_state.count[1-sel] += cur_count;      
+
+	  //next_configs[next_config] += cur_count;
         });
     }
 
-    swap(cur_configs, next_configs);
-    next_configs.clear();
+    // swap(cur_configs, next_configs);
+    // next_configs.clear();
+    sel = 1 - sel;
+
+    // cerr << "Configs after row " << row << ": " << endl;
+    // cerr << cur_configs << endl;
   }
 
   return accumulate(begin(cur_configs), end(cur_configs), 0, 
-		    [](int sum, config_count_t config_count_t) { 
-		      return sum + config_count_t.second; 
+		    [&](unsigned int sum, config_count_t tagged_count) { 
+		      if (tagged_count.second.tag[sel] != g.rows)
+			return sum;
+		      return sum + tagged_count.second.count[sel];
 		    });
 }
 
@@ -205,7 +243,7 @@ int main(int argc, char *argv[]) {
 
   Grid g(use_file ? file.seekg(0) : cin);
 
-  int total = 0;
+  unsigned int total = 0;
 
   
   if (g.cols <= 8) {
