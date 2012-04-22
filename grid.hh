@@ -11,7 +11,7 @@ using namespace std;
 struct Grid {
   struct Node {
     typedef uint8_t ordinate_t;
-    typedef uint8_t index_t;
+    typedef unsigned int index_t;
     typedef int8_t degree_t; // may become negative
     typedef pair<ordinate_t, ordinate_t> coordinate_t;
 
