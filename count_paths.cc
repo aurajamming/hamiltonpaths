@@ -5,6 +5,8 @@
 #include <vector>
 #include <unordered_map>
 
+#include <gmpxx.h>
+
 #include "configuration.hh"
 #include "grid.hh"
 #include "combinations.hh"
@@ -140,34 +142,34 @@ public:
 };
 
 
-
+template <typename CountT>
 struct configstate {
-  array<unsigned int, 2> count;
+  array<CountT, 2> count;
   array<unsigned int, 2> tag;
 };
 
-ostream &operator<<(ostream &os, const configstate &cs) {
+template<typename CountT>
+ostream &operator<<(ostream &os, const configstate<CountT> &cs) {
   os << "<count: " << cs.count << ", ";
   os << "tag: " << cs.tag << ">";
   return os;
 }
 
 			  
-template<class ConfigurationT>
-unsigned int count_paths(Grid g) {
-  typedef map<ConfigurationT, configstate > config_set_t;
-  typedef typename config_set_t::value_type config_count_t;
+template<class ConfigurationT, class CountT>
+CountT count_paths(Grid g) {
+  typedef map<ConfigurationT, configstate<CountT> > config_set;
 
-  config_set_t cur_configs, next_configs;
+  config_set cur_configs, next_configs;
   vector<Grid::Node::degree_t> target_degrees(g.cols, -1);
   vector<vector<Grid::Node> > next_neighbors(g.cols);
   int sel = 1;
 
-  ConfigurationT initial_config(vector<int>(g.cols, 0));
-  configstate initial_state;
+  const ConfigurationT empty_config(vector<int>(g.cols, 0));
+  configstate<CountT> initial_state;
   initial_state.count[sel] = 1;
   initial_state.tag[sel] = 0;
-  cur_configs.insert(make_pair(initial_config, initial_state));
+  cur_configs.insert(make_pair(empty_config, initial_state));
 
 
 
@@ -186,7 +188,7 @@ unsigned int count_paths(Grid g) {
 
       for_each_next_config<ConfigurationT>(row, cur_config, target_degrees, next_neighbors,
         [&](const ConfigurationT &next_config) {
-          configstate & count_state = cur_configs[next_config];
+          auto & count_state = cur_configs[next_config];
 
 	  if (count_state.tag[1-sel] != row + 1) {
 	    count_state.tag[1-sel] = row + 1;
@@ -206,12 +208,21 @@ unsigned int count_paths(Grid g) {
     // cerr << cur_configs << endl;
   }
 
-  return accumulate(begin(cur_configs), end(cur_configs), 0, 
-		    [&](unsigned int sum, config_count_t tagged_count) { 
+  const auto & closed_off = cur_configs[empty_config];
+  if (closed_off.tag[sel] != g.rows) {
+    cerr << "Failed to close off configuration sequence - no paths found." << endl;
+    return 0;
+  }
+
+  return closed_off.count[sel];
+  /*
+  return accumulate(begin(cur_configs), end(cur_configs), CountT(0), 
+		    [&](CountT sum, typename config_set::value_type & tagged_count) -> CountT { 
 		      if (tagged_count.second.tag[sel] != g.rows)
 			return sum;
 		      return sum + tagged_count.second.count[sel];
 		    });
+  */
 }
 
 
@@ -221,6 +232,10 @@ void repeat(size_t times, F action) {
   for(size_t i = times; i != 0; --i) 
     action();
 }
+
+
+
+typedef mpz_class CountT;
 
 int main(int argc, char *argv[]) {
   const bool use_file = argc > 1;
@@ -243,13 +258,13 @@ int main(int argc, char *argv[]) {
 
   Grid g(use_file ? file.seekg(0) : cin);
 
-  unsigned int total = 0;
+  CountT total = 0;
 
   
   if (g.cols <= 8) {
-    repeat(count, [&]{total = count_paths<Max8Configuration>(g);});
+    repeat(count, [&]{total = count_paths<Max8Configuration, CountT>(g);});
   } else {
-    repeat(count, [&]{total = count_paths<ResizableConfiguration>(g);});
+    repeat(count, [&]{total = count_paths<ResizableConfiguration, CountT>(g);});
   }
 
   cout << total << endl;

@@ -15,7 +15,7 @@ GTEST_HEADERS = /usr/include/gtest/*.h \
 COUNT_SOURCES = count_paths.cc grid.cc
 COUNT_HEADERS = configuration.hh combinations.hh grid.hh range.hh vector_out.hh
 count: $(COUNT_SOURCES) $(COUNT_HEADERS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -o count $(COUNT_SOURCES)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -o count $(COUNT_SOURCES) -lgmp -lgmpxx
 
 test : $(TESTS)
 	echo $(TESTS)
