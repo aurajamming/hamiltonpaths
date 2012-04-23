@@ -316,10 +316,18 @@ if __name__ == "__main__":
     f = sys.stdin
     timing = None
 
+    counter = count_paths
+    if len(sys.argv) > 1 and sys.argv[1] == "-s":
+        counter = show_paths
+        del sys.argv[1]
+        print "using show_paths"
+
     if len(sys.argv) > 1:
+        print "using file %s" % sys.argv[1]
         f = open(sys.argv[1])
 
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 2:        
+        print "using timing %s" % sys.argv[2]
         timing = int(sys.argv[2])
 
     g = read_graph(f)
@@ -327,5 +335,4 @@ if __name__ == "__main__":
     if timing:
         print time(g, timing)
     else:
-        print count_paths(g)
-    
+        print counter(g)
