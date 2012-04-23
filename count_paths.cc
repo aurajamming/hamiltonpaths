@@ -15,8 +15,9 @@
 
 using namespace std;
 
+typedef mpz_class CountT;
 typedef Configuration<vector<unsigned short>, no_size_t> ResizableConfiguration;
-typedef Configuration<array<unsigned short, 8>, unsigned short> Max8Configuration;
+typedef Configuration<array<unsigned short, 16>, unsigned short> FastFixedConfiguration;
 
 
 void row_setup(Grid g, Grid::Node::ordinate_t row, 
@@ -41,56 +42,64 @@ void row_setup(Grid g, Grid::Node::ordinate_t row,
 }
 
 
-template<class ConfigurationT>
+template<class ConfigurationT, bool skip_useless_combinations=true, bool early_rejection=true>
 class for_each_next_config {
 private:
   const Grid::Node::ordinate_t row, size;
-  const ConfigurationT &last_config;
+  const ConfigurationT & last_config;
   const vector<vector<Grid::Node> > &next_neighbors;
   const function<void (const ConfigurationT&)> action;
+  bool endpoint_row;
 
   vector<Grid::Node::degree_t> residual_degrees;
   vector<bool> vmask, hmask;
 
+
 public:
 
-  for_each_next_config(const int row_, 
-		       const ConfigurationT &last_config_, 
-		       const vector<Grid::Node::degree_t>& target_degrees_, 
-		       const vector<vector<Grid::Node> >& next_neighbors_,
-		       const function<void (const ConfigurationT&) > &action_)
-    : row(row_), 
-      size(last_config_.size()), 
-      last_config(last_config_), 
-      next_neighbors(next_neighbors_), 
-      action(action_),
-      residual_degrees(last_config_.size()),
-      vmask(last_config_.size(), false),
-      hmask(last_config_.size(), false)
+  for_each_next_config(const int row, 
+		       const ConfigurationT &last_config, 
+		       const vector<Grid::Node::degree_t>& target_degrees, 
+		       const vector<vector<Grid::Node> >& next_neighbors,
+		       const function<void (const ConfigurationT&) > &action)
+    : row(row), 
+      size(last_config.size()), 
+      last_config(last_config),
+      next_neighbors(next_neighbors),
+      action(action),
+      residual_degrees(last_config.size()),
+      vmask(last_config.size(), false),
+      hmask(last_config.size(), false)
   {
+    endpoint_row = false;
     for(auto col : range(size)) {
-      residual_degrees[col] = target_degrees_[col] - (last_config.col_advances(col) ? 1 : 0);
+      residual_degrees[col] = target_degrees[col] - (last_config.col_advances(col) ? 1 : 0);
+      endpoint_row = endpoint_row or (residual_degrees[col] == 1);
     }
 
-    enumerate_options(0);
+    if (early_rejection) {
+      ConfigurationT start(last_config);
+      enumerate_options_early_reject(0, 0, start);
+    } else {
+      enumerate_options_late_reject(0);
+    }
+    
   }
 
-  void enumerate_options(Grid::Node::ordinate_t col) {
+  void enumerate_options_late_reject(Grid::Node::ordinate_t col) {
     assert(col < size);
 
     const auto r = residual_degrees[col];
-    if (r <= 0) {
+    if (skip_useless_combinations and r <= 0) {
+      hmask[col] = vmask[col] = false;
       if (col == size - 1) {
-    	yield_configuration();
+	yield_configuration();
       } else {
-	hmask[col] = vmask[col] = false;
-    	enumerate_options(col + 1);
-      }
-      return;
+	enumerate_options_late_reject(col + 1);
+      }      
     }
-      
 
-    for(auto neighbor_comb : combinations<Grid::Node>(next_neighbors[col], r)) {
+    for(auto neighbor_comb : combinations<Grid::Node>(next_neighbors[col], (r<0)?0:r)) {
       hmask[col] = vmask[col] = false;
 			   
       for(Grid::Node neighbor : neighbor_comb) {
@@ -103,10 +112,11 @@ public:
 	}
       }
 
+
       if (col == size - 1) {
 	yield_configuration();
       } else {
-	enumerate_options(col + 1);
+	enumerate_options_late_reject(col + 1);
       }
 
       for(Grid::Node neighbor : neighbor_comb) {
@@ -118,26 +128,128 @@ public:
     }
   }
 
-  inline void yield_configuration() const {
-    ConfigurationT config(last_config);
-    int start = -1;
+  void enumerate_options_early_reject(Grid::Node::ordinate_t col, Grid::Node::ordinate_t start, ConfigurationT &config) {
+    assert(col < size);
 
-    for(auto col : range(size)) {
-      if (hmask[col] and (col == 0 or not hmask[col-1])) {
-	start = col;
-      } else if (hmask[col] == 0 and col > 0 and hmask[col-1]) {
-	if (config.link_would_close(start, col)) {
-	  return; // reject this configuration
+    bool skip, link;
+    Grid::Node::ordinate_t a,b;
+
+    const auto r = residual_degrees[col];
+    if (skip_useless_combinations and early_rejection and r <= 0) {
+      hmask[col] = vmask[col] = false;
+      skip = determine_link_behavior(col, config, start, link, a, b);
+      if (not skip) {
+	if (link) {
+	  ConfigurationT new_config(config);
+	  new_config.link(a, b);
+	  if (col == size - 1) {
+	    yield_configuration(new_config);
+	  } else {
+	    enumerate_options_early_reject(col + 1, start, new_config);
+	  }
+	} else {
+	  if (col == size - 1) {
+	    yield_configuration(config);
+	  } else {
+	    enumerate_options_early_reject(col + 1, start, config);
+	  }
 	}
-	config.link(start, col);
-      } else if (vmask[col]) {
-	config.link(col, col);
       }
+      return;
     }
 
-    config.mask(vmask);
+    for(auto neighbor_comb : combinations<Grid::Node>(next_neighbors[col], (r<0)?0:r)) {
+      hmask[col] = vmask[col] = false;
+			   
+      for(Grid::Node neighbor : neighbor_comb) {
+	--residual_degrees[col];
+	if (neighbor.row == row) {
+	  --residual_degrees[col + 1];
+	  hmask[col] = true;
+	} else {
+	  vmask[col] = true;
+	}
+      }
 
+
+      skip = determine_link_behavior(col, config, start, link, a, b);
+      if (not skip) {
+	if (link) {
+	  ConfigurationT new_config(config);
+	  new_config.link(a, b);
+
+	  if (col == size - 1) {
+	    yield_configuration(new_config);
+	  } else {
+	    enumerate_options_early_reject(col + 1, start, new_config);
+	  }	  
+	} else {
+	  if (col == size - 1) {
+	    yield_configuration(config);
+	  } else {
+	    enumerate_options_early_reject(col + 1, start, config);
+	  }
+	}
+      }
+
+      for(Grid::Node neighbor : neighbor_comb) {
+	++residual_degrees[col];
+	if (neighbor.row == row) {
+	  ++residual_degrees[col + 1];
+	}
+      }
+    }
+  }
+
+  inline bool determine_link_behavior(Grid::Node::ordinate_t col, const ConfigurationT & config, 
+				      Grid::Node::ordinate_t & start,
+				      bool & link, 
+				      Grid::Node::ordinate_t & a, Grid::Node::ordinate_t & b) const {
+    bool skip = false;
+    link = false;
+    if (hmask[col] and (col == 0 or not hmask[col-1])) {
+      start = col;
+    } else if (not hmask[col] and col > 0 and hmask[col-1]) {
+      if (config.link_would_close(start, col)) {
+	skip=true; // reject this configuration
+      } else {	
+	link = true;
+	a = start;
+	b = col;
+      }
+    } else if (vmask[col]) {
+      link = true;
+      a = col;
+      b = col;
+    }
+    
+    return skip;
+  }
+
+  inline void yield_configuration() const {
+    // late rejection, do linkage here
+    ConfigurationT config(last_config);
+    for (Grid::Node::ordinate_t col : range(size)) {
+      bool link;
+      Grid::Node::ordinate_t start, a, b;
+      bool skip = determine_link_behavior(col, config, start, link, a, b);
+      if (skip)
+	return;
+      if (link) 
+	config.link(a,b);
+    }
+
+    yield_configuration(config);
+  }
+
+
+  inline void yield_configuration(ConfigurationT & config) const {
+    // early rejection, linkage done
+    if (endpoint_row)
+      config.mask(vmask);
+      
     action(config);
+    
   }
 };
 
@@ -210,19 +322,11 @@ CountT count_paths(Grid g) {
 
   const auto & closed_off = cur_configs[empty_config];
   if (closed_off.tag[sel] != g.rows) {
-    cerr << "Failed to close off configuration sequence - no paths found." << endl;
+    // Failed to close off configuration sequence - no paths found.
     return 0;
   }
 
   return closed_off.count[sel];
-  /*
-  return accumulate(begin(cur_configs), end(cur_configs), CountT(0), 
-		    [&](CountT sum, typename config_set::value_type & tagged_count) -> CountT { 
-		      if (tagged_count.second.tag[sel] != g.rows)
-			return sum;
-		      return sum + tagged_count.second.count[sel];
-		    });
-  */
 }
 
 
@@ -235,7 +339,7 @@ void repeat(size_t times, F action) {
 
 
 
-typedef mpz_class CountT;
+
 
 int main(int argc, char *argv[]) {
   const bool use_file = argc > 1;
@@ -262,7 +366,7 @@ int main(int argc, char *argv[]) {
 
   
   if (g.cols <= 8) {
-    repeat(count, [&]{total = count_paths<Max8Configuration, CountT>(g);});
+    repeat(count, [&]{total = count_paths<FastFixedConfiguration, CountT>(g);});
   } else {
     repeat(count, [&]{total = count_paths<ResizableConfiguration, CountT>(g);});
   }
