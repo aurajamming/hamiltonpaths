@@ -16,6 +16,8 @@ def next_configs(row, last_config, target_degrees, next_neighbors):
     last_config = Config(last_config)
     cols = len(last_config)
 
+    endpoint_row = 1 in target_degrees
+
     # the vmask and hmask arrays are declared here as mutable arrays
     # to avoid them being passed as arguments to the options
     # function. Ordinarily this would be stupid, but options is on the
@@ -25,37 +27,13 @@ def next_configs(row, last_config, target_degrees, next_neighbors):
     vmask = [0] * cols
     hmask = [0] * cols
     
-    def options(col=0):
+    def options(config, col=0, start=None):
         # Recursively enumerate every possible next configuration from
         # this configuration and row.
 
         if col == cols:
-            # base case: a decision has been made for every forward-
-            # and down-edge in this row. Use this information to
-            # extract horizontal links and create a configuration for
-            # the resulting next row.
-
-            config = last_config.copy()
-
-            for idx in range(cols):
-                if hmask[idx] == 1 and (idx == 0 or hmask[idx-1] == 0):
-                    # start of horizontal link
-                    start = idx 
-                elif hmask[idx] == 0 and idx > 0 and hmask[idx-1] == 1:
-                    # end of horizontal link                    
-                    if config.would_close(start, idx):
-                        # if doing this link would form a cycle,
-                        # reject this configuration by returning
-                        # before yielding any configuration
-                        return
-                    # otherwise, record the link
-                    config.link(start, idx)
-                elif vmask[idx] == 1:
-                    # straight link from previous to next row
-                    config.link(idx, idx)
-
-            config.mask(vmask)
-
+            if endpoint_row:
+                config.mask(vmask)
             yield config
             return
 
@@ -74,9 +52,26 @@ def next_configs(row, last_config, target_degrees, next_neighbors):
                 else:
                     vmask[col] = 1
 
-            # recurse to get all the completed configurations from this point.
-            for completed in options(col + 1):
-                yield completed
+            skip = False
+            new_config = config
+            if hmask[col] == 1 and (col == 0 or hmask[col-1] == 0):
+                start = col
+            elif hmask[col] == 0 and col > 0 and hmask[col-1] == 1:
+                if config.would_close(start, col):
+                    skip = True
+                else:
+                    new_config = config.copy()
+                    new_config.link(start, col)
+            elif vmask[col] == 1:
+                new_config = config.copy()
+                new_config.link(col, col)
+                
+
+            if not skip:
+                # recurse to get all the completed configurations from this point.
+                for completed in options(new_config, col + 1, start):
+                    yield completed
+            
 
             # undo changes to shared state
             for neighbor in neighbor_comb:
@@ -86,7 +81,7 @@ def next_configs(row, last_config, target_degrees, next_neighbors):
 
 
     # start the recursion and yield each configuration as a tuple
-    for option_config in options():
+    for option_config in options(last_config):
         yield tuple(option_config.path_ids())
 
 
